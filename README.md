@@ -37,6 +37,8 @@ If the Dockerfile is in a subfolder of the `build-dir`, specify it's location
 
     $ container build foo --build-dir /usr/local/workdir --dockerfile dev/Dockerfile
 
+The `build-dir` is what docker calls the "build context," which means the image only has access to files inside the `build-dir`, and nothing outside it.
+
 
 Listing images
 --------------
