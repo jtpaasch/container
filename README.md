@@ -79,7 +79,7 @@ Stopping containers
 
 To stop the running `foo` image:
 
-    $ container stop `foo`
+    $ container stop foo
 
 
 
