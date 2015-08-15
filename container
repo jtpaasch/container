@@ -1,0 +1,355 @@
+#!/usr/bin/env bash
+
+# What's the name of this program?
+PROGRAM=`basename $BASH_SOURCE`
+
+# A function to explain usage.
+function usage {
+    echo "CONTAINER"
+    echo "A tool that builds and runs docker containers."
+    echo ""
+    echo "-- List containers:"
+    echo "   $PROGRAM list"
+    echo ""
+    echo "-- List running containers."
+    echo "   $PROGRAM ps"
+    echo ""
+    echo "-- Build a container."
+    echo "   $PROGRAM build <name> [--build-dir <path>] [--dockerfile <file>]"
+    echo ""
+    echo "-- Start/run a container."
+    echo "   $PROGRAM start <name> [--bash]"
+    echo ""
+    echo "-- Stop/kill a running container."
+    echo "   $PROGRAM stop <name>"
+    echo ""
+    echo "-- Destroy a container."
+    echo "   $PROGRAM destroy <name>"
+    echo ""
+}
+
+# A function that explains how to get help.
+function helphint {
+    echo "Try: $PROGRAM --help"
+}
+
+# If no command was specified, say so and exit.
+if [[ "$#" == "0" ]]; then
+    echo "No command specified."
+    helphint
+    exit 1
+fi
+
+# What's the command that was specified?
+case $1 in
+
+    # The help option.
+    -h|--help)  usage
+                exit
+                ;;
+
+    # The "build" option -- builds an image.
+    build)      COMMAND="build"
+                ;;
+
+    # The "destroy" option -- destroys an image.
+    destroy)    COMMAND="destroy"
+                ;;
+
+    # The "list" option -- lists all images.
+    list)       COMMAND="list"
+                ;;
+
+    # The "start" option -- starts/runs an image.
+    start)      COMMAND="start"
+                ;;
+
+    # The "stop" option -- stop/kill a running container.
+    stop)       COMMAND="stop"
+                ;;
+
+    # The "ps" option -- lists running containers.
+    ps)         COMMAND="ps"
+                ;;
+
+    # Anything else is unrecognized.
+    *)          echo "Unrecognized command: $1"
+                helphint
+                exit 1
+                ;;
+
+esac
+shift
+
+# Handle the "list" command.
+if [[ "$COMMAND" == "list" ]]; then
+    docker images
+
+# Handle the "ps" command.
+elif [[ "$COMMAND" == "ps" ]]; then
+    docker ps -a
+
+# Handle the "build" command.
+elif [[ "$COMMAND" == "build" ]]; then
+
+    # If no options were specified, raise an error and exit.
+    if [[ "$#" == "0" ]]; then
+        echo "No build options specified."
+        helphint
+        exit 1
+    fi
+
+    # Go through the options.
+    while (( "$#" )); do
+        case $1 in
+
+            # The help option.
+            -h|--help)     usage
+                           exit
+                           ;;
+
+            # The --build-dir option.
+            --build-dir)   shift
+                           BUILD_DIR=$1
+                           ;;
+
+            # The --dockerfile option.
+            --dockerfile)  shift
+                           DOCKERFILE=$1
+                           ;;
+
+            # Anything else must be the NAME. But only the first time
+            # we encounter it. A second free option is unrecognized.
+            *)             if [[ -z $NAME ]]; then
+                               NAME=$1
+                           else
+                               echo "Unrecognized option: $1"
+                               helphint
+                               exit 1
+                           fi
+                           ;;
+
+        esac
+        shift
+    done
+
+    # There must be a name for the image.
+    if [[ -z $NAME ]]; then
+        echo "Specify a name, e.g. $PROGRAM build db"
+        helphint
+        exit 1
+    fi
+
+    # Docker image names are in the form "repo:tag". Let's split on the
+    # colon and get both. If there's no tag, docker defaults to "latest".
+    IFS=':' read REPO TAG <<< "$NAME"
+    if [[ -z $TAG ]]; then
+        TAG='latest'
+    fi
+
+    # There must be a build directory.
+    if [[ -z $BUILD_DIR ]]; then
+        echo "Specify a build directory, e.g., --build-dir /usr/local/workdir"
+        helphint
+        exit 1
+    fi
+
+    # The build directory cannot be root.
+    if [[ $BUILD_DIR == "/" ]]; then
+        echo "The build directory cannot be root: /"
+        exit 1
+    fi
+
+    # Remove duplicate slashes and remove a final trailing slash.
+    BUILD_DIR=$(echo -n $BUILD_DIR | tr -s /)
+    BUILD_DIR=${BUILD_DIR%/}
+
+    # Assume 'Dockerfile' if no DOCKERFILE is specified.
+    if [[ -z $DOCKERFILE ]]; then
+        DOCKERFILE='Dockerfile'
+    fi
+
+    # Try to delete the image (in case it exists already).
+    echo "Deleting image $REPO:$TAG if it exists"
+    docker rmi $REPO:$TAG >/dev/null
+
+    # Now build the image fresh.
+    docker build \
+           --force-rm=true \
+           --no-cache=true \
+           --file=$BUILD_DIR/$DOCKERFILE \
+           -t $REPO:$TAG \
+           $BUILD_DIR
+
+# Handle the "destroy" command.
+elif [[ "$COMMAND" == "destroy" ]]; then
+
+    # If no options were specified, raise an error and exit.
+    if [[ "$#" == "0" ]]; then
+        echo "No destroy options specified."
+        helphint
+        exit 1
+    fi
+
+    # Go through the options.
+    while (( "$#" )); do
+        case $1 in
+
+            # The help option.
+            -h|--help)     usage
+                           exit
+                           ;;
+
+            # Any unrecognized options (starting with a dash).
+            -*)            echo "Unrecognized option: $1"
+                           helphint
+                           exit 1
+                           ;;
+
+            # Anything else must be the IMAGE. But only the first time
+            # we encounter it. A second free option is unrecognized.
+            *)             if [[ -z $IMAGE ]]; then
+                               IMAGE=$1
+                           else
+                               echo "Unrecognized option: $1"
+                               helphint
+                               exit 1
+                           fi
+                           ;;
+
+        esac
+        shift
+    done
+
+    # We need to know which image to destroy.
+    if [[ -z $IMAGE ]]; then
+        echo "Specify an image to destroy, e.g. $PROGRAM destroy db"
+        helphint
+        exit 1
+    fi
+
+    # Docker image names are in the form "repo:tag". Let's split on the
+    # colon and get both. If there's no tag, docker defaults to "latest".
+    IFS=':' read REPO TAG <<< "$IMAGE"
+    if [[ -z $TAG ]]; then
+        TAG='latest'
+    fi
+
+    # Now destroy the container.
+    docker rmi -f $REPO:$TAG
+
+# Handle the "start" command.
+elif [[ "$COMMAND" == "start" ]]; then
+
+    # If no options were specified, raise an error and exit.
+    if [[ "$#" == "0" ]]; then
+        echo "No start options specified."
+        helphint
+        exit 1
+    fi
+
+    # Go through the options.
+    while (( "$#" )); do
+        case $1 in
+
+            # The help option.
+            -h|--help)     usage
+                           exit
+                           ;;
+
+            # The --bash option.
+            --bash)        INTERACTIVE_FLAG="-it"
+                           BASH_PATH="/bin/bash"
+                           ;;
+
+            # Anything else must be the IMAGE. But only the first time
+            # we encounter it. A second free option is unrecognized.
+            *)             if [[ -z $IMAGE ]]; then
+                               IMAGE=$1
+                           else
+                               echo "Unrecognized option: $1"
+                               helphint
+                               exit 1
+                           fi
+                           ;;
+
+        esac
+        shift
+    done
+
+    # We need to know which image to run.
+    if [[ -z $IMAGE ]]; then
+        echo "Specify a container to start, e.g. $CONTAINER start db"
+        helphint
+        exit 1
+    fi
+
+    # Docker image names are in the form "repo:tag". Let's split on the
+    # colon and get both. If there's no tag, docker defaults to "latest".
+    IFS=':' read REPO TAG <<< "$IMAGE"
+    if [[ -z $TAG ]]; then
+        TAG='latest'
+    fi
+
+    # Now run the container.
+    docker run \
+           --rm \
+           --name "${REPO}_${TAG}" \
+           $INTERACTIVE_FLAG \
+           $REPO:$TAG \
+           $BASH_PATH
+
+# Handle the "stop" command.
+elif [[ "$COMMAND" == "stop" ]]; then
+
+    # Go through the options.
+    while (( "$#" )); do
+        case $1 in
+
+            # The help option.
+            -h|--help)     usage
+                           exit
+                           ;;
+
+            # Any unrecognized options (starting with a dash).
+            -*)            echo "Unrecognized option: $1"
+                           helphint
+                           exit 1
+                           ;;
+
+            # Anything else must be the IMAGE. But only the first time
+            # we encounter it. A second free option is unrecognized.
+            *)             if [[ -z $IMAGE ]]; then
+                               IMAGE=$1
+                           else
+                               echo "Unrecognized option: $1"
+                               helphint
+                               exit 1
+                           fi
+                           ;;
+
+        esac
+        shift
+    done
+
+    # We need to know which container to stop
+    if [[ -z $IMAGE ]]; then
+        echo "Specify a container to stop, e.g. $PROGRAM stop db"
+        helphint
+        exit 1
+    fi
+
+    # Docker image names are in the form "repo:tag". Let's split on the
+    # colon and get both. If there's no tag, docker defaults to "latest".
+    IFS=':' read REPO TAG <<< "$IMAGE"
+    if [[ -z $TAG ]]; then
+        TAG='latest'
+    fi
+
+    # Now stop the running container.
+    docker stop "${REPO}_${TAG}"
+
+# Anything else...? We don't know what to do with it.
+else
+    echo "Nothing to do."
+fi
