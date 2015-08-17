@@ -111,7 +111,7 @@ To get all information about the running container `foo`:
 Stopping containers
 -------------------
 
-To stop the running `foo` image:
+To stop the running `foo` container:
 
     $ container stop foo
 
