@@ -28,16 +28,20 @@ See the help:
 Building images
 ---------------
 
-Build an image called `foo` from a `Dockerfile` in the folder `/usr/local/workdir`:
+Build an image called `foo` from a `Dockerfile` in the folder 
+`/usr/local/workdir`:
 
-    $ container build foo --build-dir /usr/local/workdir
+    $ container build foo /usr/local/workdir
 
-If the Dockerfile is in a subfolder of the `build-dir`, specify it's location
-(relative to the `build-dir`) with the `--dockerfile` flag. For instance:
+If the Dockerfile is in a subfolder of the build directory, specify it's 
+location (relative to the build directory) with the `--dockerfile` flag. 
+For instance:
 
-    $ container build foo --build-dir /usr/local/workdir --dockerfile dev/Dockerfile
+    $ container build foo /usr/local/workdir --dockerfile dev/Dockerfile
 
-The `build-dir` is what docker calls the "build context," which means the image only has access to files inside the `build-dir`, and nothing outside it.
+The build directory is what docker calls the "build context," which means 
+the image only has access to files inside the build directory, and nothing 
+outside it.
 
 
 Listing images
@@ -67,6 +71,21 @@ If you want to get a bash prompt in `foo` instead, use the `--bash` flag:
 
     $ container start foo --bash
 
+To add a volume at `host_path` (on your machine) to the `container_path` 
+(inside the container), use the `--volume <host_path>:<container_path` flag:
+
+    $ container start foo --volume /usr/share:/var/share
+
+To forward a `container_port` (inside the container) to a `host_port`
+(on your machine), use the `--port <host_port>:<container_port>` flag:
+
+    $ container start foo --port 8011:8000
+
+To link anathor container, us the `--link <other-container-name>` flag:
+
+    $ container start foo --link db
+
+
 Listing running containers
 --------------------------
 
@@ -74,12 +93,28 @@ To see a list of all running containers:
 
     $ container ps
 
+
+Get a container's IP address
+----------------------------
+
+To get the IP address of a running container, use the `ip <name>` command:
+
+    $ container ip foo
+
+
+Get detailed container info
+---------------------------
+
+To get all the information about a running container, use the 
+`info <name>` command:
+
+    $ container info foo
+
+
 Stopping containers
 -------------------
 
 To stop the running `foo` image:
 
     $ container stop foo
-
-
 
