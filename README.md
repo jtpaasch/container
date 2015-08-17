@@ -95,7 +95,7 @@ To see a list of all running containers:
 Get a container's IP address
 ----------------------------
 
-To get the IP address of a running container, use the `ip <name>` command:
+To get the IP address of the running container `foo`:
 
     $ container ip foo
 
@@ -103,8 +103,7 @@ To get the IP address of a running container, use the `ip <name>` command:
 Get detailed container info
 ---------------------------
 
-To get all the information about a running container, use the 
-`info <name>` command:
+To get all information about the running container `foo`:
 
     $ container info foo
 
