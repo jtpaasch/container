@@ -71,17 +71,15 @@ If you want to get a bash prompt in `foo` instead, use the `--bash` flag:
 
     $ container start foo --bash
 
-To add a volume at `host_path` (on your machine) to the `container_path` 
-(inside the container), use the `--volume <host_path>:<container_path` flag:
+To add the folder `/usr/share` (on your machine) to the `foo` container as `/var/share`: 
 
     $ container start foo --volume /usr/share:/var/share
 
-To forward a `container_port` (inside the container) to a `host_port`
-(on your machine), use the `--port <host_port>:<container_port>` flag:
+To forward the container's port `8000` to your machine's port `8011`:
 
     $ container start foo --port 8011:8000
 
-To link anathor container, us the `--link <other-container-name>` flag:
+To link another container called `db`: 
 
     $ container start foo --link db
 
