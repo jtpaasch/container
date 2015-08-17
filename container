@@ -8,23 +8,34 @@ function usage {
     echo "CONTAINER"
     echo "A tool that builds and runs docker containers."
     echo ""
-    echo "-- List containers:"
+    echo "-- List container images:"
     echo "   $PROGRAM list"
     echo ""
     echo "-- List running containers."
     echo "   $PROGRAM ps"
     echo ""
-    echo "-- Build a container."
-    echo "   $PROGRAM build <name> [--build-dir <path>] [--dockerfile <file>]"
+    echo "-- Build a container image."
+    echo "   $PROGRAM build <name> <build-path>"
+    echo "       [--dockerfile <file>]"
     echo ""
     echo "-- Start/run a container."
-    echo "   $PROGRAM start <name> [--bash]"
+    echo "   $PROGRAM start <name>"
+    echo "       [--bash]"
+    echo "       [--volume <host_path>:<container_path>]"
+    echo "       [--port <host_port>:<container_port>]"
+    echo "       [--link <container_name>]"
     echo ""
     echo "-- Stop/kill a running container."
     echo "   $PROGRAM stop <name>"
     echo ""
-    echo "-- Destroy a container."
+    echo "-- Destroy a container image."
     echo "   $PROGRAM destroy <name>"
+    echo ""
+    echo "-- Get a running container's IP address."
+    echo "   $PROGRAM ip <name>"
+    echo ""
+    echo "-- Get information about a running container."
+    echo "   $PROGRAM info <name>"
     echo ""
 }
 
@@ -48,19 +59,19 @@ case $1 in
                 exit
                 ;;
 
-    # The "build" option -- builds an image.
+    # The "build" option -- builds a container image.
     build)      COMMAND="build"
                 ;;
 
-    # The "destroy" option -- destroys an image.
+    # The "destroy" option -- destroys a container image.
     destroy)    COMMAND="destroy"
                 ;;
 
-    # The "list" option -- lists all images.
+    # The "list" option -- lists all container images.
     list)       COMMAND="list"
                 ;;
 
-    # The "start" option -- starts/runs an image.
+    # The "start" option -- starts/runs a container.
     start)      COMMAND="start"
                 ;;
 
@@ -68,8 +79,20 @@ case $1 in
     stop)       COMMAND="stop"
                 ;;
 
-    # The "ps" option -- lists running containers.
+    # The "ps" option -- lists all running containers.
     ps)         COMMAND="ps"
+                ;;
+
+    # The "ip <name>" option -- gets the IP of a running container.
+    ip)         COMMAND="ip"
+                shift
+                NAME="$1"
+                ;;
+
+    # The "info <name>" option -- gets all info about a running container.
+    info)       COMMAND="info"
+                shift
+                NAME="$1"
                 ;;
 
     # Anything else is unrecognized.
@@ -88,6 +111,32 @@ if [[ "$COMMAND" == "list" ]]; then
 # Handle the "ps" command.
 elif [[ "$COMMAND" == "ps" ]]; then
     docker ps -a
+
+# Handle the "ip" command.
+elif [[ "$COMMAND" == "ip" ]]; then
+
+    # Docker image names are in the form "repo:tag". Let's split on the
+    # colon and get both. If there's no tag, docker defaults to "latest".
+    IFS=':' read REPO TAG <<< "$NAME"
+    if [[ -z $TAG ]]; then
+        TAG='latest'
+    fi
+
+    # Run "inspect" and pull out the IP address.
+    docker inspect --format '{{.NetworkSettings.IPAddress}}' "${REPO}_${TAG}"
+
+# Handle the "info" command.
+elif [[ "$COMMAND" == "info" ]]; then
+
+    # Docker image names are in the form "repo:tag". Let's split on the
+    # colon and get both. If there's no tag, docker defaults to "latest".
+    IFS=':' read REPO TAG <<< "$NAME"
+    if [[ -z $TAG ]]; then
+        TAG='latest'
+    fi
+
+    # Run "inspect" and get all data.
+    docker inspect "${REPO}_${TAG}"
 
 # Handle the "build" command.
 elif [[ "$COMMAND" == "build" ]]; then
@@ -108,24 +157,24 @@ elif [[ "$COMMAND" == "build" ]]; then
                            exit
                            ;;
 
-            # The --build-dir option.
-            --build-dir)   shift
-                           BUILD_DIR=$1
-                           ;;
-
             # The --dockerfile option.
             --dockerfile)  shift
                            DOCKERFILE=$1
                            ;;
 
-            # Anything else must be the NAME. But only the first time
-            # we encounter it. A second free option is unrecognized.
+            # The first positional argument should be the name.
+            # The second should be the build directory.
+            # Anything else is unrecognized. 
             *)             if [[ -z $NAME ]]; then
                                NAME=$1
                            else
-                               echo "Unrecognized option: $1"
-                               helphint
-                               exit 1
+                               if [[ -z $BUILD_DIR ]]; then
+                                   BUILD_DIR=$1
+                               else
+                                   echo "Unrecognized option: $1"
+                                   helphint
+                                   exit 1
+                               fi
                            fi
                            ;;
 
@@ -147,21 +196,12 @@ elif [[ "$COMMAND" == "build" ]]; then
         TAG='latest'
     fi
 
-    # There must be a build directory.
+    # If no build directory is set, default to the current directory.
     if [[ -z $BUILD_DIR ]]; then
-        echo "Specify a build directory, e.g., --build-dir /usr/local/workdir"
-        helphint
-        exit 1
+        BUILD_DIR='.'
     fi
 
-    # The build directory cannot be root.
-    if [[ $BUILD_DIR == "/" ]]; then
-        echo "The build directory cannot be root: /"
-        exit 1
-    fi
-
-    # Remove duplicate slashes and remove a final trailing slash.
-    BUILD_DIR=$(echo -n $BUILD_DIR | tr -s /)
+    # Remove any trailing slash.
     BUILD_DIR=${BUILD_DIR%/}
 
     # Assume 'Dockerfile' if no DOCKERFILE is specified.
@@ -262,6 +302,36 @@ elif [[ "$COMMAND" == "start" ]]; then
                            BASH_PATH="/bin/bash"
                            ;;
 
+            # The --volume option. There can be many of these,
+            # so we want to add them to an array.
+            -v|--volume)   shift
+                           if [ -z $VOLUMES ]; then
+                               VOLUMES=("$1")
+                           else
+                               VOLUMES=("$VOLUMES" "$1")
+                           fi
+                           ;;
+
+            # The --port option. There can be many of these too,
+            # so we want to add them to an array.
+            -p|--port)     shift
+                           if [ -z $PORTS ]; then
+                               PORTS=("$1")
+                           else
+                               PORTS=("$PORTS" "$1")
+                           fi
+                           ;;
+
+            # The --link option. There can be many of these as well,
+            # so we want to add them to an array.
+            -l|--link)     shift
+                           if [ -z $LINKS ]; then
+                               LINKS=("$1")
+                           else
+                               LINKS=("$LINKS" "$1")
+                           fi
+                           ;;
+
             # Anything else must be the IMAGE. But only the first time
             # we encounter it. A second free option is unrecognized.
             *)             if [[ -z $IMAGE ]]; then
@@ -291,10 +361,32 @@ elif [[ "$COMMAND" == "start" ]]; then
         TAG='latest'
     fi
 
+    # If we have any volumes, let's expand the list into 
+    # a bunch of "--volume $VOLUMES[$i]" options.
+    for VOLUME in "${VOLUMES[@]}"; do
+        VOLUME_OPTIONS="${VOLUME_OPTIONS} --volume ${VOLUME}"
+    done
+
+    # If we have any ports, let's expand the list into
+    # a bunch of "--publish $PORTS[$i]" options.
+    for PORT in "${PORTS[@]}"; do
+        PORT_OPTIONS="${PORT_OPTIONS} --publish ${PORT}"
+    done
+
+    # If we have any links, let's exand the list into 
+    # a bunch of "--link $LINKS[$i]" options.
+    for LINK in "${LINKS[@]}"; do
+        LINK_OPTIONS="${LINK_OPTIONS} --link ${LINK}"
+    done
+
     # Now run the container.
+    set -x
     docker run \
            --rm \
            --name "${REPO}_${TAG}" \
+           $VOLUME_OPTIONS \
+           $PORT_OPTIONS \
+           $LINK_OPTIONS \
            $INTERACTIVE_FLAG \
            $REPO:$TAG \
            $BASH_PATH
