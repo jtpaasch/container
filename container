@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+#
+# CONTAINER
+# A tool that builds and runs docker containers.
+#
+# Author JT Paasch
+# License MIT <http://opensource.org/licenses/MIT>
+#
 
 # What's the name of this program?
 PROGRAM=`basename $BASH_SOURCE`
@@ -7,6 +14,9 @@ PROGRAM=`basename $BASH_SOURCE`
 function usage {
     echo "CONTAINER"
     echo "A tool that builds and runs docker containers."
+    echo ""
+    echo "-- See help:"
+    echo "   $PROGRAM --help"
     echo ""
     echo "-- List container images:"
     echo "   $PROGRAM list"
@@ -25,7 +35,7 @@ function usage {
     echo "       [--port <host_port>:<container_port>]"
     echo "       [--link <container_name>]"
     echo ""
-    echo "-- Stop/kill a running container."
+    echo "-- Stop a running container."
     echo "   $PROGRAM stop <name>"
     echo ""
     echo "-- Destroy a container image."
@@ -36,7 +46,6 @@ function usage {
     echo ""
     echo "-- Get information about a running container."
     echo "   $PROGRAM info <name>"
-    echo ""
 }
 
 # A function that explains how to get help.
@@ -60,7 +69,7 @@ case $1 in
                 ;;
 
     # The "build" option -- builds a container image.
-    build)      COMMAND="build"
+    build)      COMMAND="build" 
                 ;;
 
     # The "destroy" option -- destroys a container image.
@@ -95,8 +104,14 @@ case $1 in
                 NAME="$1"
                 ;;
 
+    # The "logs <name>" option -- tail the logs for a running container.
+    logs)       COMMAND="logs"
+                shift
+                NAME="$1"
+                ;;
+
     # Anything else is unrecognized.
-    *)          echo "Unrecognized command: $1"
+    *)          echo "Invalid first argument: '$1'"
                 helphint
                 exit 1
                 ;;
@@ -106,14 +121,32 @@ shift
 
 # Handle the "list" command.
 if [[ "$COMMAND" == "list" ]]; then
+    set -x
     docker images
+    { set +x; } 2>/dev/null
 
 # Handle the "ps" command.
 elif [[ "$COMMAND" == "ps" ]]; then
+    set -x
     docker ps -a
+    { set +x; } 2>/dev/null
 
 # Handle the "ip" command.
 elif [[ "$COMMAND" == "ip" ]]; then
+
+    # We need the name of a container, if we want to get its IP.
+    if [[ -z $NAME ]]; then
+        echo "Specify a container name: $PROGRAM ip <name>"
+        helphint
+        exit 1
+    fi
+
+    # The name can't start with a dash.
+    if [[ $NAME == -* ]]; then
+        echo "Specify a container name: $PROGRAM ip <name>"
+        helphint
+        exit 1
+    fi
 
     # Docker image names are in the form "repo:tag". Let's split on the
     # colon and get both. If there's no tag, docker defaults to "latest".
@@ -123,10 +156,26 @@ elif [[ "$COMMAND" == "ip" ]]; then
     fi
 
     # Run "inspect" and pull out the IP address.
+    set -x
     docker inspect --format '{{.NetworkSettings.IPAddress}}' "${REPO}_${TAG}"
+    { set +x; } 2>/dev/null
 
 # Handle the "info" command.
 elif [[ "$COMMAND" == "info" ]]; then
+
+    # We need the name of a container, if we want to get its info.
+    if [[ -z $NAME ]]; then
+        echo "Specify a container name: $PROGRAM info <name>"
+        helphint
+        exit 1
+    fi
+
+    # The name can't start with a dash.
+    if [[ $NAME == -* ]]; then
+        echo "Specify a container name: $PROGRAM info <name>"
+        helphint
+        exit 1
+    fi
 
     # Docker image names are in the form "repo:tag". Let's split on the
     # colon and get both. If there's no tag, docker defaults to "latest".
@@ -136,9 +185,29 @@ elif [[ "$COMMAND" == "info" ]]; then
     fi
 
     # Run "inspect" and get all data.
+    set -x
     docker inspect "${REPO}_${TAG}"
+    { set +x; } 2>/dev/null
 
-# Handle the "build" command.
+# Handle the "logs" command.
+elif [[ "$COMMAND" == "logs" ]]; then
+
+    # Docker image names are in the form "repo:tag". Let's split on the
+    # colon and get both. If there's no tag, docker defaults to "latest".
+    IFS=':' read REPO TAG <<< "$NAME"
+    if [[ -z $TAG ]]; then
+        TAG='latest'
+    fi
+
+    # Run "logs" command.
+    # Note: The logs are kept on the docker host at: 
+    # /var/lib/docker/containers/<image-id>/<image-id>-json.log
+    # The whole <image-id> folder is deleted when the container is deleted.
+    set -x
+    docker logs --follow "${REPO}_${TAG}"
+    { set +x; } 2>/dev/null
+
+# Handle the "build" command.cebc1a452171
 elif [[ "$COMMAND" == "build" ]]; then
 
     # If no options were specified, raise an error and exit.
@@ -157,24 +226,36 @@ elif [[ "$COMMAND" == "build" ]]; then
                            exit
                            ;;
 
+            # The --from option.
+            --from)        if [[ -z $BUILD_DIR ]]; then
+                               shift
+                               BUILD_DIR=$1
+                           else
+                               echo "Specify --from only once."
+                               helphint
+                               exit 1
+                           fi
+                           ;;
+
             # The --dockerfile option.
-            --dockerfile)  shift
-                           DOCKERFILE=$1
+            --dockerfile)  if [[ -z $DOCKERFILE ]]; then
+                               shift
+                               DOCKERFILE=$1
+                           else
+                               echo "Specify only one --dockerfile."
+                               helphint
+                               exit 1
+                           fi
                            ;;
 
             # The first positional argument should be the name.
-            # The second should be the build directory.
             # Anything else is unrecognized. 
             *)             if [[ -z $NAME ]]; then
                                NAME=$1
                            else
-                               if [[ -z $BUILD_DIR ]]; then
-                                   BUILD_DIR=$1
-                               else
-                                   echo "Unrecognized option: $1"
-                                   helphint
-                                   exit 1
-                               fi
+                               echo "Unrecognized option: $1"
+                               helphint
+                               exit 1
                            fi
                            ;;
 
@@ -214,12 +295,14 @@ elif [[ "$COMMAND" == "build" ]]; then
     docker rmi $REPO:$TAG >/dev/null
 
     # Now build the image fresh.
+    set -x
     docker build \
            --force-rm=true \
            --no-cache=true \
            --file=$BUILD_DIR/$DOCKERFILE \
            -t $REPO:$TAG \
            $BUILD_DIR
+    { set +x; } 2>/dev/null
 
 # Handle the "destroy" command.
 elif [[ "$COMMAND" == "destroy" ]]; then
@@ -276,7 +359,9 @@ elif [[ "$COMMAND" == "destroy" ]]; then
     fi
 
     # Now destroy the container.
+    set -x
     docker rmi -f $REPO:$TAG
+    { set +x; } 2>/dev/null
 
 # Handle the "start" command.
 elif [[ "$COMMAND" == "start" ]]; then
@@ -298,8 +383,8 @@ elif [[ "$COMMAND" == "start" ]]; then
                            ;;
 
             # The --bash option.
-            --bash)        INTERACTIVE_FLAG="-it"
-                           BASH_PATH="/bin/bash"
+            --bash)        BASH_PATH="/bin/bash"
+                           break
                            ;;
 
             # The --volume option. There can be many of these,
@@ -333,7 +418,7 @@ elif [[ "$COMMAND" == "start" ]]; then
                            ;;
 
             # Anything else must be the IMAGE. But only the first time
-            # we encounter it. A second free option is unrecognized.
+            # we encounter it. A second free parameter is unrecognized.
             *)             if [[ -z $IMAGE ]]; then
                                IMAGE=$1
                            else
@@ -379,17 +464,27 @@ elif [[ "$COMMAND" == "start" ]]; then
         LINK_OPTIONS="${LINK_OPTIONS} --link ${LINK}"
     done
 
+    # What log options should we use?
+    # The standard json-file logger is fine, and we'll
+    # put limits on the size and number of log files it creates.
+    # (Note: these options seem to have no effect in my testing.)
+    LOG_OPTIONS="--log-driver=json-file \
+                 --log-opt max-size=2k \
+                 --log-opt max-file=2 "
+
     # Now run the container.
     set -x
     docker run \
-           --rm \
+           -d \
+           -it \
            --name "${REPO}_${TAG}" \
+           $LOG_OPTIONS \
            $VOLUME_OPTIONS \
            $PORT_OPTIONS \
            $LINK_OPTIONS \
-           $INTERACTIVE_FLAG \
            $REPO:$TAG \
            $BASH_PATH
+    { set +x; } 2>/dev/null
 
 # Handle the "stop" command.
 elif [[ "$COMMAND" == "stop" ]]; then
@@ -439,9 +534,13 @@ elif [[ "$COMMAND" == "stop" ]]; then
     fi
 
     # Now stop the running container.
+    set -x
     docker stop "${REPO}_${TAG}"
+    docker rm "${REPO}_${TAG}"
+    { set +x; } 2>/dev/null
 
-# Anything else...? We don't know what to do with it.
+# Anything else...? If so, we don't know what to do.
+# It's unlikely we'll end up here, but just in case, let's give a message.
 else
     echo "Nothing to do."
 fi
