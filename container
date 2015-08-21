@@ -378,13 +378,13 @@ function build {
     # Display the help/usage?
     if [[ "$HELP" == "true" ]]; then
         echo "USAGE"
-        echo "  $PROGRAM $COMMAND <name> --from <build-dir> [OPTIONS]"
+        echo "  $PROGRAM $COMMAND <name> [OPTIONS]"
         echo ""
         echo "DESCRIPTION"
         echo "  Builds a container called <name> from the <build-dir>."
         echo "  A Dockerfile is assumed to exist in the <build-dir>. If not,"
-        echo "  specify its location with the --dockerfile. The file must be"
-        echo "  somewhere under the <build-dir>. All paths should be absolute."
+        echo "  specify its location with the --dockerfile option. The file"
+        echo "  exist somewhere under the <build-dir>."
         echo ""
         echo "OPTIONS"
         echo "  <name>              The name of the container."
@@ -575,6 +575,22 @@ function start {
         shift
     done
 
+    # Display the help/usage?
+    if [[ "$HELP" == "true" ]]; then
+        echo "USAGE"
+        echo "  $PROGRAM $COMMAND <name> [OPTIONS]"
+        echo ""
+        echo "DESCRIPTION"
+        echo "  Starts a container."
+        echo ""
+        echo "OPTIONS"
+        echo "  <name>                  The name of the container."
+        echo "  --port <portA:portB>    Map container port B to host port A."
+        echo "  --volume <pathA:pathB>  Map container path B to host path A."
+        echo "  --link <name>           Link the named container."
+        exit 1
+    fi
+
     # We need to know which container to run.
     if [[ -z $NAME ]]; then
         echo "Specify a container to start, e.g. $CONTAINER $COMMAND db"
@@ -625,7 +641,7 @@ function start {
            $VOLUME_OPTIONS \
            $PORT_OPTIONS \
            $LINK_OPTIONS \
-           $REPO:$TAG \
+           $REPO:$TAG
     { set +x; } 2>/dev/null
 
 }
@@ -638,7 +654,7 @@ function stop {
         case $1 in
 
             # The help option.
-            -h|--help|help)  HELP=true
+            -h|--help|help)  HELP="true"
                              ;;
 
             # Any unrecognized options (starting with a dash).
@@ -661,6 +677,15 @@ function stop {
         esac
         shift
     done
+
+    if [[ "$HELP" == "true" ]]; then
+        echo "USAGE"
+        echo "  $PROGRAM $COMMAND <name>"
+        echo ""
+        echo "DESCRIPTION"
+        echo "  Stops a container."
+        exit 1
+    fi
 
     # We need to know which container to stop
     if [[ -z $NAME ]]; then
@@ -728,20 +753,14 @@ case $1 in
 
     # The "ip <name>" option -- gets the IP of a running container.
     ip)              COMMAND="ip"
-                     shift
-                     NAME="$1"
                      ;;
 
     # The "info <name>" option -- gets all info about a running container.
     info)            COMMAND="info"
-                     shift
-                     NAME="$1"
                      ;;
 
     # The "logs <name>" option -- tail the logs for a running container.
     logs)            COMMAND="logs"
-                     shift
-                     NAME="$1"
                      ;;
 
     # Anything else is unrecognized.
@@ -753,6 +772,5 @@ case $1 in
 esac
 shift
 
-
-# Execute the command.
+# Execute the selected command.
 $COMMAND $@
