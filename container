@@ -7,142 +7,175 @@
 # License MIT <http://opensource.org/licenses/MIT>
 #
 
-# What's the name of this program?
-PROGRAM=`basename $BASH_SOURCE`
-
 # A function to explain usage.
 function usage {
-    echo "CONTAINER"
-    echo "A tool that builds and runs docker containers."
+    echo "NAME"
+    echo "  container"
     echo ""
-    echo "-- See help:"
-    echo "   $PROGRAM --help"
+    echo "DESCRIPTION"
+    echo "  A tool that builds and runs docker containers."
     echo ""
-    echo "-- List container images:"
-    echo "   $PROGRAM list"
+    echo "COMMANDS"
+    echo "  build    Build a container image."
+    echo "  destroy  Destroy a container image."
+    echo "  start    Start a container."
+    echo "  stop     Stop a container."
+    echo "  list     List all container images."
+    echo "  ps       List all running containers."
+    echo "  ip       Get the IP address of a running container."
+    echo "  info     Get info about a running container."
+    echo "  logs     Tail the logs of a container."
     echo ""
-    echo "-- List running containers."
-    echo "   $PROGRAM ps"
+    echo "HELP"
+    echo "  -h --help help    Display this help/usage screen."
+    echo "  <command> --help  Display help/usage for <command>"
     echo ""
-    echo "-- Build a container image."
-    echo "   $PROGRAM build <name> <build-path>"
-    echo "       [--dockerfile <file>]"
-    echo ""
-    echo "-- Start/run a container."
-    echo "   $PROGRAM start <name>"
-    echo "       [--bash]"
-    echo "       [--volume <host_path>:<container_path>]"
-    echo "       [--port <host_port>:<container_port>]"
-    echo "       [--link <container_name>]"
-    echo ""
-    echo "-- Stop a running container."
-    echo "   $PROGRAM stop <name>"
-    echo ""
-    echo "-- Destroy a container image."
-    echo "   $PROGRAM destroy <name>"
-    echo ""
-    echo "-- Get a running container's IP address."
-    echo "   $PROGRAM ip <name>"
-    echo ""
-    echo "-- Get information about a running container."
-    echo "   $PROGRAM info <name>"
 }
 
 # A function that explains how to get help.
 function helphint {
-    echo "Try: $PROGRAM --help"
+    if (( "$#" )); then
+        echo "Try: $PROGRAM $@ --help"
+    else
+        echo "Try: $PROGRAM --help"
+    fi
 }
 
-# If no command was specified, say so and exit.
-if [[ "$#" == "0" ]]; then
-    echo "No command specified."
-    helphint
-    exit 1
-fi
+# A function that gets the full path for a location.
+function absolute_path {
+    ORIGINAL_PWD=`pwd`
+    if [[ ! -z $1 ]]; then
+	cd $1
+    fi
+    echo `pwd`
+    cd $ORIGINAL_PWD
+}
 
-# What's the command that was specified?
-case $1 in
+# A function that handles the "list" command.
+function list {
 
-    # The help option.
-    -h|--help)  usage
-                exit
-                ;;
+    # Step through the arguments.
+    while (( "$#" )); do
+        case $1 in
 
-    # The "build" option -- builds a container image.
-    build)      COMMAND="build" 
-                ;;
+            # The 'help' option: displays help/usage.
+            -h|--help|help)  HELP="true"
+                             ;;
 
-    # The "destroy" option -- destroys a container image.
-    destroy)    COMMAND="destroy"
-                ;;
+            # Anything else is unrecognized.
+            *)               echo "Unrecognized option: $1"
+                             helphint $COMMAND
+                             exit 1
+                             ;;
 
-    # The "list" option -- lists all container images.
-    list)       COMMAND="list"
-                ;;
+        esac
+        shift
+    done
 
-    # The "start" option -- starts/runs a container.
-    start)      COMMAND="start"
-                ;;
+    # Display the help/usage?
+    if [[ "$HELP" == "true" ]]; then
+        echo "USAGE"
+        echo "  $PROGRAM $COMMAND"
+        echo ""
+        echo "DESCRIPTION"
+        echo "  Lists all built container images."
+        exit 1
+     fi
 
-    # The "stop" option -- stop/kill a running container.
-    stop)       COMMAND="stop"
-                ;;
-
-    # The "ps" option -- lists all running containers.
-    ps)         COMMAND="ps"
-                ;;
-
-    # The "ip <name>" option -- gets the IP of a running container.
-    ip)         COMMAND="ip"
-                shift
-                NAME="$1"
-                ;;
-
-    # The "info <name>" option -- gets all info about a running container.
-    info)       COMMAND="info"
-                shift
-                NAME="$1"
-                ;;
-
-    # The "logs <name>" option -- tail the logs for a running container.
-    logs)       COMMAND="logs"
-                shift
-                NAME="$1"
-                ;;
-
-    # Anything else is unrecognized.
-    *)          echo "Invalid first argument: '$1'"
-                helphint
-                exit 1
-                ;;
-
-esac
-shift
-
-# Handle the "list" command.
-if [[ "$COMMAND" == "list" ]]; then
+    # Get the list of container images from docker.
     set -x
     docker images
     { set +x; } 2>/dev/null
 
-# Handle the "ps" command.
-elif [[ "$COMMAND" == "ps" ]]; then
-    set -x
-    docker ps -a
-    { set +x; } 2>/dev/null
+}
 
-# Handle the "ip" command.
-elif [[ "$COMMAND" == "ip" ]]; then
+# A function that handles the "ps" command.
+function ps {
 
-    # We need the name of a container, if we want to get its IP.
-    if [[ -z $NAME ]]; then
-        echo "Specify a container name: $PROGRAM ip <name>"
-        helphint
+    # Step through the arguments.
+    while (( "$#" )); do
+        case $1 in
+
+            # The 'help' option: displays help/usage.
+            -h|--help|help)  HELP="true"
+                             ;;
+
+            # The '--all' option: include stopped containers too.
+            -a|--all)        INCLUDE_STOPPED=" -a"
+                             ;;
+
+            # Anything else is unrecognized.
+            *)               echo "Unrecognized option: $1"
+                             helphint $COMMAND
+                             exit 1
+                             ;;
+
+        esac
+        shift
+    done
+
+    # Display the help/usage?
+    if [[ "$HELP" == "true" ]]; then
+        echo "USAGE"
+        echo "  $PROGRAM $COMMAND"
+        echo ""
+        echo "DESCRIPTION"
+        echo "  Lists all running containers."
+        echo ""
+        echo "OPTIONS"
+        echo "  -a --all  Include containers that have stopped."
         exit 1
     fi
 
-    # The name can't start with a dash.
-    if [[ $NAME == -* ]]; then
+    # Get the list of all containers. 
+    set -x
+    docker ps $INCLUDE_STOPPED
+    { set +x; } 2>/dev/null
+
+}
+
+# A function that handles the "ip" command.
+function ip {
+
+    # Step through the arguments.
+    while (( "$#" )); do
+        case $1 in
+
+            # The 'help' option: displays help/usage.
+            -h|--help|help)  HELP="true"
+                             ;;
+
+            # Anything else must be the name in "$PROGRAM ip <name>."
+            # But only the first time we encounter it. If we encounter
+            # another argument, it's unrecognized. 
+            *)               if [[ -z $NAME ]]; then
+                                 NAME=$1
+                             else
+                                 echo "Unrecognized option: $1"
+                                 helphint $COMMAND
+                                 exit 1
+                             fi
+                             ;;
+
+        esac
+        shift
+    done
+
+    # Display the help/usage?
+    if [[ "$HELP" == "true" ]]; then
+        echo "USAGE"
+        echo "  $PROGRAM $COMMAND <name>"
+        echo ""
+        echo "DESCRIPTION"
+        echo "  Get the IP address of a container."
+        echo ""
+        echo "OPTIONS"
+        echo "  <name>  The name of the container."
+        exit 1
+    fi
+
+    # We need the name of a container, if we want to get its IP.
+    if [[ -z $NAME ]]; then
         echo "Specify a container name: $PROGRAM ip <name>"
         helphint
         exit 1
@@ -160,18 +193,50 @@ elif [[ "$COMMAND" == "ip" ]]; then
     docker inspect --format '{{.NetworkSettings.IPAddress}}' "${REPO}_${TAG}"
     { set +x; } 2>/dev/null
 
-# Handle the "info" command.
-elif [[ "$COMMAND" == "info" ]]; then
+}
 
-    # We need the name of a container, if we want to get its info.
-    if [[ -z $NAME ]]; then
-        echo "Specify a container name: $PROGRAM info <name>"
-        helphint
+# A function to handle the "info" command.
+function info {
+
+    # Step through the arguments.
+    while (( "$#" )); do
+        case $1 in
+
+            # The 'help' option: displays help/usage.
+            -h|--help|help)  HELP="true"
+                             ;;
+
+            # Anything else must be the name in "$PROGRAM info <name>."
+            # But only the first time we encounter it. If we encounter
+            # another argument, it's unrecognized. 
+            *)               if [[ -z $NAME ]]; then
+                                 NAME=$1
+                             else
+                                 echo "Unrecognized option: $1"
+                                 helphint $COMMAND
+                                 exit 1
+                             fi
+                             ;;
+
+        esac
+        shift
+    done
+
+    # Display the help/usage?
+    if [[ "$HELP" == "true" ]]; then
+        echo "USAGE"
+        echo "  $PROGRAM $COMMAND <name>"
+        echo ""
+        echo "DESCRIPTION"
+        echo "  Get info about a container."
+        echo ""
+        echo "OPTIONS"
+        echo "  <name>  The name of the container."
         exit 1
     fi
 
-    # The name can't start with a dash.
-    if [[ $NAME == -* ]]; then
+    # We need the name of a container, if we want to get its info.
+    if [[ -z $NAME ]]; then
         echo "Specify a container name: $PROGRAM info <name>"
         helphint
         exit 1
@@ -189,8 +254,54 @@ elif [[ "$COMMAND" == "info" ]]; then
     docker inspect "${REPO}_${TAG}"
     { set +x; } 2>/dev/null
 
-# Handle the "logs" command.
-elif [[ "$COMMAND" == "logs" ]]; then
+}
+
+# A function to handle the "logs" command.
+function logs {
+
+    # Step through the arguments.
+    while (( "$#" )); do
+        case $1 in
+
+            # The 'help' option: displays help/usage.
+            -h|--help|help)  HELP="true"
+                             ;;
+
+            # Anything else must be the name in "$PROGRAM logs <name>."
+            # But only the first time we encounter it. If we encounter
+            # another argument, it's unrecognized. 
+            *)               if [[ -z $NAME ]]; then
+                                 NAME=$1
+                             else
+                                 echo "Unrecognized option: $1"
+                                 helphint $COMMAND
+                                 exit 1
+                             fi
+                             ;;
+
+        esac
+        shift
+    done
+
+    # Display the help/usage?
+    if [[ "$HELP" == "true" ]]; then
+        echo "USAGE"
+        echo "  $PROGRAM $COMMAND <name>"
+        echo ""
+        echo "DESCRIPTION"
+        echo "  Tail the logs of a container."
+        echo ""
+        echo "OPTIONS"
+        echo "  <name>  The name of the container."
+        exit 1
+    fi
+
+    # We need the name of a container, if we want to tail its logs.
+    if [[ -z $NAME ]]; then
+        echo "Specify a container name: $PROGRAM logs <name>"
+        helphint
+        exit 1
+    fi
 
     # Docker image names are in the form "repo:tag". Let's split on the
     # colon and get both. If there's no tag, docker defaults to "latest".
@@ -199,7 +310,7 @@ elif [[ "$COMMAND" == "logs" ]]; then
         TAG='latest'
     fi
 
-    # Run "logs" command.
+    # Run the "docker logs" command.
     # Note: The logs are kept on the docker host at: 
     # /var/lib/docker/containers/<image-id>/<image-id>-json.log
     # The whole <image-id> folder is deleted when the container is deleted.
@@ -207,13 +318,15 @@ elif [[ "$COMMAND" == "logs" ]]; then
     docker logs --follow "${REPO}_${TAG}"
     { set +x; } 2>/dev/null
 
-# Handle the "build" command.cebc1a452171
-elif [[ "$COMMAND" == "build" ]]; then
+}
+
+# A function to handle the "build" command.
+function build {
 
     # If no options were specified, raise an error and exit.
     if [[ "$#" == "0" ]]; then
         echo "No build options specified."
-        helphint
+        helphint $COMMAND
         exit 1
     fi
 
@@ -222,51 +335,68 @@ elif [[ "$COMMAND" == "build" ]]; then
         case $1 in
 
             # The help option.
-            -h|--help)     usage
-                           exit
-                           ;;
+            -h|--help|help)  HELP="true"
+                             ;;
 
-            # The --from option.
-            --from)        if [[ -z $BUILD_DIR ]]; then
-                               shift
-                               BUILD_DIR=$1
-                           else
-                               echo "Specify --from only once."
-                               helphint
-                               exit 1
-                           fi
-                           ;;
+            # The --from option. There can only be one of these.
+            --from)          if [[ -z $BUILD_DIR ]]; then
+                                 shift
+                                 BUILD_DIR=$1
+                             else
+                                 echo "Specify --from only once."
+                                 helphint $COMMAND
+                                 exit 1
+                             fi
+                             ;;
 
             # The --dockerfile option.
-            --dockerfile)  if [[ -z $DOCKERFILE ]]; then
-                               shift
-                               DOCKERFILE=$1
-                           else
-                               echo "Specify only one --dockerfile."
-                               helphint
-                               exit 1
-                           fi
-                           ;;
+            --dockerfile)    if [[ -z $DOCKERFILE ]]; then
+                                 shift
+                                 DOCKERFILE=$1
+                             else
+                                 echo "Specify only one --dockerfile."
+                                 helphint $COMMAND
+                                 exit 1
+                             fi
+                             ;;
 
             # The first positional argument should be the name.
             # Anything else is unrecognized. 
-            *)             if [[ -z $NAME ]]; then
-                               NAME=$1
-                           else
-                               echo "Unrecognized option: $1"
-                               helphint
-                               exit 1
-                           fi
-                           ;;
+            *)               if [[ -z $NAME ]]; then
+                                 NAME=$1
+                             else
+                                 echo "Unrecognized option: $1"
+                                 helphint $COMMAND
+                                 exit 1
+                             fi
+                             ;;
 
         esac
         shift
     done
 
+    # Display the help/usage?
+    if [[ "$HELP" == "true" ]]; then
+        echo "USAGE"
+        echo "  $PROGRAM $COMMAND <name> --from <build-dir> [OPTIONS]"
+        echo ""
+        echo "DESCRIPTION"
+        echo "  Builds a container called <name> from the <build-dir>."
+        echo "  A Dockerfile is assumed to exist in the <build-dir>. If not,"
+        echo "  specify its location with the --dockerfile. The file must be"
+        echo "  somewhere under the <build-dir>. All paths should be absolute."
+        echo ""
+        echo "OPTIONS"
+        echo "  <name>              The name of the container."
+        echo "  --from <build-dir>  The build context. Required."
+        echo "  --dockerfile        The Dockerfile path, if not <build-dir>."
+        exit 1
+    fi
+
     # There must be a name for the image.
     if [[ -z $NAME ]]; then
-        echo "Specify a name, e.g. $PROGRAM build db"
-        helphint
+        echo "Specify a name, e.g. $PROGRAM $COMMAND db"
+        helphint $COMMAND
         exit 1
     fi
 
@@ -285,9 +415,12 @@ elif [[ "$COMMAND" == "build" ]]; then
     # Remove any trailing slash.
     BUILD_DIR=${BUILD_DIR%/}
 
+    # Get the absolute/full path of the build directory.
+    BUILD_DIR=`absolute_path $BUILD_DIR`
+
     # Assume 'Dockerfile' if no DOCKERFILE is specified.
     if [[ -z $DOCKERFILE ]]; then
-        DOCKERFILE='Dockerfile'
+        DOCKERFILE=$BUILD_DIR'/Dockerfile'
     fi
 
     # Try to delete the image (in case it exists already).
@@ -299,18 +432,20 @@ elif [[ "$COMMAND" == "build" ]]; then
     docker build \
            --force-rm=true \
            --no-cache=true \
-           --file=$BUILD_DIR/$DOCKERFILE \
+           --file=$DOCKERFILE \
            -t $REPO:$TAG \
            $BUILD_DIR
     { set +x; } 2>/dev/null
 
-# Handle the "destroy" command.
-elif [[ "$COMMAND" == "destroy" ]]; then
+}
+
+# A function to handle the "destroy" command.
+function destroy {
 
     # If no options were specified, raise an error and exit.
     if [[ "$#" == "0" ]]; then
         echo "No destroy options specified."
-        helphint
+        helphint $COMMAND
         exit 1
     fi
 
@@ -319,41 +454,53 @@ elif [[ "$COMMAND" == "destroy" ]]; then
         case $1 in
 
             # The help option.
-            -h|--help)     usage
-                           exit
-                           ;;
+            -h|--help|help)  HELP="true"
+                             ;;
 
             # Any unrecognized options (starting with a dash).
-            -*)            echo "Unrecognized option: $1"
-                           helphint
-                           exit 1
-                           ;;
+            -*)              echo "Unrecognized option: $1"
+                             helphint $COMMAND
+                             exit 1
+                             ;;
 
-            # Anything else must be the IMAGE. But only the first time
-            # we encounter it. A second free option is unrecognized.
-            *)             if [[ -z $IMAGE ]]; then
-                               IMAGE=$1
-                           else
-                               echo "Unrecognized option: $1"
-                               helphint
-                               exit 1
-                           fi
-                           ;;
+            # Anything else must be the NAME. But only the first time
+            # we encounter it. A second option is unrecognized.
+            *)               if [[ -z $NAME ]]; then
+                                 NAME=$1
+                             else
+                                 echo "Unrecognized option: $1"
+                                 helphint $COMMAND
+                                 exit 1
+                             fi
+                             ;;
 
         esac
         shift
     done
 
+    # Display the help/usage?
+    if [[ "$HELP" == "true" ]]; then
+        echo "USAGE"
+        echo "  $PROGRAM $COMMAND <name>"
+        echo ""
+        echo "DESCRIPTION"
+        echo "  Destroys a container."
+        echo ""
+        echo "OPTIONS"
+        echo "  <name>              The name of the container."
+        exit 1
+    fi
+
     # We need to know which image to destroy.
-    if [[ -z $IMAGE ]]; then
-        echo "Specify an image to destroy, e.g. $PROGRAM destroy db"
-        helphint
+    if [[ -z $NAME ]]; then
+        echo "Specify a container to destroy, e.g. $PROGRAM $COMMAND db"
+        helphint $COMMAND
         exit 1
     fi
 
     # Docker image names are in the form "repo:tag". Let's split on the
     # colon and get both. If there's no tag, docker defaults to "latest".
-    IFS=':' read REPO TAG <<< "$IMAGE"
+    IFS=':' read REPO TAG <<< "$NAME"
     if [[ -z $TAG ]]; then
         TAG='latest'
     fi
@@ -363,13 +510,15 @@ elif [[ "$COMMAND" == "destroy" ]]; then
     docker rmi -f $REPO:$TAG
     { set +x; } 2>/dev/null
 
+}
+
 # Handle the "start" command.
-elif [[ "$COMMAND" == "start" ]]; then
+function start {
 
     # If no options were specified, raise an error and exit.
     if [[ "$#" == "0" ]]; then
         echo "No start options specified."
-        helphint
+        helphint $COMMAND
         exit 1
     fi
 
@@ -378,70 +527,64 @@ elif [[ "$COMMAND" == "start" ]]; then
         case $1 in
 
             # The help option.
-            -h|--help)     usage
-                           exit
-                           ;;
-
-            # The --bash option.
-            --bash)        BASH_PATH="/bin/bash"
-                           break
-                           ;;
+            -h|--help|help)  HELP="true"
+                             ;;
 
             # The --volume option. There can be many of these,
             # so we want to add them to an array.
-            -v|--volume)   shift
-                           if [ -z $VOLUMES ]; then
-                               VOLUMES=("$1")
-                           else
-                               VOLUMES=("$VOLUMES" "$1")
-                           fi
-                           ;;
+            -v|--volume)     shift
+                             if [ -z $VOLUMES ]; then
+                                 VOLUMES=("$1")
+                             else
+                                 VOLUMES=("$VOLUMES" "$1")
+                             fi
+                             ;;
 
             # The --port option. There can be many of these too,
             # so we want to add them to an array.
-            -p|--port)     shift
-                           if [ -z $PORTS ]; then
-                               PORTS=("$1")
-                           else
-                               PORTS=("$PORTS" "$1")
-                           fi
-                           ;;
+            -p|--port)       shift
+                             if [ -z $PORTS ]; then
+                                 PORTS=("$1")
+                             else
+                                 PORTS=("$PORTS" "$1")
+                             fi
+                             ;;
 
             # The --link option. There can be many of these as well,
             # so we want to add them to an array.
-            -l|--link)     shift
-                           if [ -z $LINKS ]; then
-                               LINKS=("$1")
-                           else
-                               LINKS=("$LINKS" "$1")
-                           fi
-                           ;;
+            -l|--link)       shift
+                             if [ -z $LINKS ]; then
+                                 LINKS=("$1")
+                             else
+                                 LINKS=("$LINKS" "$1")
+                             fi
+                             ;;
 
-            # Anything else must be the IMAGE. But only the first time
-            # we encounter it. A second free parameter is unrecognized.
-            *)             if [[ -z $IMAGE ]]; then
-                               IMAGE=$1
-                           else
-                               echo "Unrecognized option: $1"
-                               helphint
-                               exit 1
-                           fi
-                           ;;
+            # Anything else must be the NAME. But only the first time
+            # we encounter it. A second option is unrecognized.
+            *)               if [[ -z $NAME ]]; then
+                                 NAME=$1
+                             else
+                                 echo "Unrecognized option: $1"
+                                 helphint $COMMAND
+                                 exit 1
+                             fi
+                             ;;
 
         esac
         shift
     done
 
-    # We need to know which image to run.
-    if [[ -z $IMAGE ]]; then
-        echo "Specify a container to start, e.g. $CONTAINER start db"
-        helphint
+    # We need to know which container to run.
+    if [[ -z $NAME ]]; then
+        echo "Specify a container to start, e.g. $CONTAINER $COMMAND db"
+        helphint $COMMAND
         exit 1
     fi
 
     # Docker image names are in the form "repo:tag". Let's split on the
     # colon and get both. If there's no tag, docker defaults to "latest".
-    IFS=':' read REPO TAG <<< "$IMAGE"
+    IFS=':' read REPO TAG <<< "$NAME"
     if [[ -z $TAG ]]; then
         TAG='latest'
     fi
@@ -483,34 +626,34 @@ elif [[ "$COMMAND" == "start" ]]; then
            $PORT_OPTIONS \
            $LINK_OPTIONS \
            $REPO:$TAG \
-           $BASH_PATH
     { set +x; } 2>/dev/null
 
-# Handle the "stop" command.
-elif [[ "$COMMAND" == "stop" ]]; then
+}
+
+# A function to handle the "stop" command.
+function stop {
 
     # Go through the options.
     while (( "$#" )); do
         case $1 in
 
             # The help option.
-            -h|--help)     usage
-                           exit
-                           ;;
+            -h|--help|help)  HELP=true
+                             ;;
 
             # Any unrecognized options (starting with a dash).
-            -*)            echo "Unrecognized option: $1"
-                           helphint
-                           exit 1
-                           ;;
+            -*)              echo "Unrecognized option: $1"
+                             helphint $COMMAND
+                             exit 1
+                             ;;
 
-            # Anything else must be the IMAGE. But only the first time
-            # we encounter it. A second free option is unrecognized.
-            *)             if [[ -z $IMAGE ]]; then
-                               IMAGE=$1
+            # Anything else must be the NAME. But only the first time
+            # we encounter it. A second option is unrecognized.
+            *)             if [[ -z $NAME ]]; then
+                               NAME=$1
                            else
                                echo "Unrecognized option: $1"
-                               helphint
+                               helphint $COMMAND
                                exit 1
                            fi
                            ;;
@@ -520,15 +663,15 @@ elif [[ "$COMMAND" == "stop" ]]; then
     done
 
     # We need to know which container to stop
-    if [[ -z $IMAGE ]]; then
-        echo "Specify a container to stop, e.g. $PROGRAM stop db"
-        helphint
+    if [[ -z $NAME ]]; then
+        echo "Specify a container to stop, e.g. $PROGRAM $COMMAND db"
+        helphint $COMMAND
         exit 1
     fi
 
     # Docker image names are in the form "repo:tag". Let's split on the
     # colon and get both. If there's no tag, docker defaults to "latest".
-    IFS=':' read REPO TAG <<< "$IMAGE"
+    IFS=':' read REPO TAG <<< "$NAME"
     if [[ -z $TAG ]]; then
         TAG='latest'
     fi
@@ -539,8 +682,77 @@ elif [[ "$COMMAND" == "stop" ]]; then
     docker rm "${REPO}_${TAG}"
     { set +x; } 2>/dev/null
 
-# Anything else...? If so, we don't know what to do.
-# It's unlikely we'll end up here, but just in case, let's give a message.
-else
-    echo "Nothing to do."
+}
+
+# What's the name of this program?
+PROGRAM=`basename $BASH_SOURCE`
+
+# If no initial command was specified, say so and exit.
+if [[ "$#" == "0" ]]; then
+    echo "No command specified."
+    helphint
+    exit 1
 fi
+
+# What's the command that was specified?
+case $1 in
+
+    # The help option.
+    -h|--help|help)  usage
+                     exit 1
+                     ;;
+
+    # The "build" option -- builds a container image.
+    build)           COMMAND="build" 
+                     ;;
+
+    # The "destroy" option -- destroys a container image.
+    destroy)         COMMAND="destroy"
+                     ;;
+
+    # The "list" option -- lists all container images.
+    list)            COMMAND="list"
+                     ;;
+
+    # The "start" option -- starts/runs a container.
+    start)           COMMAND="start"
+                     ;;
+
+    # The "stop" option -- stop/kill a running container.
+    stop)            COMMAND="stop"
+                     ;;
+
+    # The "ps" option -- lists all running containers.
+    ps)              COMMAND="ps"
+                     ;;
+
+    # The "ip <name>" option -- gets the IP of a running container.
+    ip)              COMMAND="ip"
+                     shift
+                     NAME="$1"
+                     ;;
+
+    # The "info <name>" option -- gets all info about a running container.
+    info)            COMMAND="info"
+                     shift
+                     NAME="$1"
+                     ;;
+
+    # The "logs <name>" option -- tail the logs for a running container.
+    logs)            COMMAND="logs"
+                     shift
+                     NAME="$1"
+                     ;;
+
+    # Anything else is unrecognized.
+    *)               echo "Invalid first argument: '$1'"
+                     helphint
+                     exit 1
+                     ;;
+
+esac
+shift
+
+
+# Execute the command.
+$COMMAND $@
